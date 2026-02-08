@@ -87,11 +87,11 @@ resource "aws_sns_topic_subscription" "product_updates_sqs_target" {
 
 # Bucket S3
 resource "aws_s3_bucket" "notifications" {
-  bucket = "notifications"
+  bucket = "notifications-4da82ffa"
   acl    = "private"
 
   tags = {
-    Name        = "notifications"
+    Name        = "notifications-4da82ffa"
     Environment = "dev"
   }
 }
