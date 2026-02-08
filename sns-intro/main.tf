@@ -1,109 +1,87 @@
 provider "aws" {
   region = "us-east-1"
 }
-
-# SNS Topic
-resource "aws_sns_topic" "notification_updates" {
-  name = "notification_updates-topic"
+// Variables
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-1"
 }
 
-# SQS Queue - User Updates
-resource "aws_sqs_queue" "user_updates_queue" {
-  name = "user-updates-queue"
+variable "lambda_zip_path" {
+  description = "Path to the built lambda zip file (created by dotnet publish + zip)"
+  type        = string
+  default     = "./SendUpdateNotifications/SendUpdateNotifications.zip"
 }
 
-# Policy para User Updates Queue
-data "aws_iam_policy_document" "user_updates_queue_policy" {
-  statement {
-    sid    = "Allow-SNS-SendMessage-UserUpdates"
-    effect = "Allow"
+provider "aws" {
+  region = var.aws_region
+}
 
-    principals {
-      type        = "Service"
-      identifiers = ["sns.amazonaws.com"]
-    }
+// IAM role for Lambda
+resource "aws_iam_role" "lambda_role" {
+  name = "send_update_notifications_lambda_role"
 
-    actions   = ["sqs:SendMessage"]
-    resources = [aws_sqs_queue.user_updates_queue.arn]
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
 
-    condition {
-      test     = "ArnEquals"
-      variable = "aws:SourceArn"
-      values   = [aws_sns_topic.notification_updates.arn]
+// Inline policy: CloudWatch Logs + SNS Publish to the two topics
+resource "aws_iam_role_policy" "lambda_policy" {
+  name = "send_update_notifications_policy"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow",
+        Action = ["sns:Publish"],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+// Lambda function
+resource "aws_lambda_function" "send_update_notifications" {
+  function_name = "SendUpdateNotificatons"
+  filename      = var.lambda_zip_path
+  source_code_hash = filebase64sha256(var.lambda_zip_path)
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "SendUpdateNotifications::SendUpdateNotifications.Function::FunctionHandler"
+  runtime       = "dotnet9"
+  memory_size   = 256
+  timeout       = 30
+
+  environment {
+    variables = {
+      USER_TOPIC_ARN     = arn:aws:sqs:us-east-1:863207306552:user-updates-queue
+      PRODUCTS_TOPIC_ARN = arn:aws:sqs:us-east-1:863207306552:product-updates-queue
     }
   }
 }
 
-resource "aws_sqs_queue_policy" "user_updates_queue_policy_attachment" {
-  queue_url = aws_sqs_queue.user_updates_queue.id
-  policy    = data.aws_iam_policy_document.user_updates_queue_policy.json
+output "lambda_name" {
+  value = aws_lambda_function.send_update_notifications.function_name
 }
 
-# Subscription SNS -> SQS (User Updates)
-resource "aws_sns_topic_subscription" "user_updates_sqs_target" {
-  topic_arn = aws_sns_topic.notification_updates.arn
-  protocol  = "sqs"
-  endpoint  = aws_sqs_queue.user_updates_queue.arn
-}
-
-# SQS Queue - Product Updates
-resource "aws_sqs_queue" "product_updates_queue" {
-  name = "product-updates-queue"
-}
-
-# Policy para Product Updates Queue
-data "aws_iam_policy_document" "product_updates_queue_policy" {
-  statement {
-    sid    = "Allow-SNS-SendMessage-ProductUpdates"
-    effect = "Allow"
-
-    principals {
-      type        = "Service"
-      identifiers = ["sns.amazonaws.com"]
-    }
-
-    actions   = ["sqs:SendMessage"]
-    resources = [aws_sqs_queue.product_updates_queue.arn]
-
-    condition {
-      test     = "ArnEquals"
-      variable = "aws:SourceArn"
-      values   = [aws_sns_topic.notification_updates.arn]
-    }
-  }
-}
-
-resource "aws_sqs_queue_policy" "product_updates_queue_policy_attachment" {
-  queue_url = aws_sqs_queue.product_updates_queue.id
-  policy    = data.aws_iam_policy_document.product_updates_queue_policy.json
-}
-
-# Subscription SNS -> SQS (Product Updates)
-resource "aws_sns_topic_subscription" "product_updates_sqs_target" {
-  topic_arn = aws_sns_topic.notification_updates.arn
-  protocol  = "sqs"
-  endpoint  = aws_sqs_queue.product_updates_queue.arn
-}
-
-# Bucket S3
-resource "aws_s3_bucket" "notifications" {
-  bucket = "notifications-4da82ffa"
-  acl    = "private"
-
-  tags = {
-    Name        = "notifications-4da82ffa"
-    Environment = "dev"
-  }
-}
-
-# Criar "pasta" users
-resource "aws_s3_object" "users_folder" {
-  bucket = aws_s3_bucket.notifications.id
-  key    = "users/"   # prefixo que simula pasta
-}
-
-# Criar "pasta" products
-resource "aws_s3_object" "products_folder" {
-  bucket = aws_s3_bucket.notifications.id
-  key    = "products/"
-}
