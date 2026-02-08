@@ -72,8 +72,8 @@ resource "aws_lambda_function" "send_update_notifications" {
 
   environment {
     variables = {
-      USER_TOPIC_ARN     = arn:aws:sqs:us-east-1:863207306552:user-updates-queue
-      PRODUCTS_TOPIC_ARN = arn:aws:sqs:us-east-1:863207306552:product-updates-queue
+      USER_TOPIC_ARN     = "arn:aws:sqs:us-east-1:863207306552:user-updates-queue"
+      PRODUCTS_TOPIC_ARN = "arn:aws:sqs:us-east-1:863207306552:product-updates-queue"
     }
   }
 }
