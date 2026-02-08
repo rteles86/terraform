@@ -66,7 +66,7 @@ resource "aws_lambda_function" "send_update_notifications" {
   source_code_hash = filebase64sha256(var.lambda_zip_path)
   role          = aws_iam_role.lambda_role.arn
   handler       = "SendUpdateNotifications::SendUpdateNotifications.Function::FunctionHandler"
-  runtime       = "dotnet9"
+  runtime       = "dotnet8"
   memory_size   = 256
   timeout       = 30
 
