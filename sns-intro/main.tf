@@ -34,7 +34,7 @@ data "aws_iam_policy_document" "sqs_queue_policy" {
     principals {
       type        = "Service"
       identifiers = ["sns.amazonaws.com"]
-    }
+    },
 
     "Action": [
         "sqs:*"
