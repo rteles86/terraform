@@ -1,45 +1,78 @@
-resource "aws_sns_topic" "notification_updates" {
-  name = "user-updates-topic"
+provider "aws" {
+  region = "us-east-1"
 }
 
+# SNS Topic
+resource "aws_sns_topic" "notification_updates" {
+  name = "notification_updates"
+}
+
+# SQS Queue - User Updates
 resource "aws_sqs_queue" "user_updates_queue" {
   name   = "user-updates-queue"
-  policy = data.aws_iam_policy_document.sqs_queue_policy.json
+  policy = data.aws_iam_policy_document.user_updates_queue_policy.json
 }
 
+# Subscription SNS -> SQS (User Updates)
 resource "aws_sns_topic_subscription" "user_updates_sqs_target" {
   topic_arn = aws_sns_topic.notification_updates.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.user_updates_queue.arn
 }
 
+# SQS Queue - Product Updates
 resource "aws_sqs_queue" "product_updates_queue" {
   name   = "product-updates-queue"
-  policy = data.aws_iam_policy_document.sqs_queue_policy.json
+  policy = data.aws_iam_policy_document.product_updates_queue_policy.json
 }
 
+# Subscription SNS -> SQS (Product Updates)
 resource "aws_sns_topic_subscription" "product_updates_sqs_target" {
   topic_arn = aws_sns_topic.notification_updates.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.product_updates_queue.arn
 }
 
-data "aws_iam_policy_document" "sqs_queue_policy" {
-  policy_id = "terraform-sns-sqs"
-
+# IAM Policy para User Updates Queue
+data "aws_iam_policy_document" "user_updates_queue_policy" {
   statement {
-    sid    = "user_updates_sqs_target"
+    sid    = "Allow-SNS-SendMessage-UserUpdates"
     effect = "Allow"
 
     principals {
       type        = "Service"
       identifiers = ["sns.amazonaws.com"]
-    },
+    }
 
-    "Action": [
-        "sqs:*"
-    ],
-    "Effect": "Allow",
-    "Resource": "*"
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.user_updates_queue.arn]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_sns_topic.notification_updates.arn]
+    }
+  }
+}
+
+# IAM Policy para Product Updates Queue
+data "aws_iam_policy_document" "product_updates_queue_policy" {
+  statement {
+    sid    = "Allow-SNS-SendMessage-ProductUpdates"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+
+    actions   = ["sqs:SendMessage"]
+    resources = [aws_sqs_queue.product_updates_queue.arn]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_sns_topic.notification_updates.arn]
+    }
   }
 }
