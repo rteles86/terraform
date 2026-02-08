@@ -1,9 +1,5 @@
 name: Terraform CI/CD
 
-permissions:
-  id-token: write
-  contents: read
-  
 on:
   push:
     branches: [ "main" ]
