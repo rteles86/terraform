@@ -1,6 +1,7 @@
 provider "aws" {
   region = "us-east-1"
 }
+
 // Variables
 variable "aws_region" {
   description = "AWS region"
@@ -12,10 +13,6 @@ variable "lambda_zip_path" {
   description = "Path to the built lambda zip file (created by dotnet publish + zip)"
   type        = string
   default     = "./SendUpdateNotifications/SendUpdateNotifications.zip"
-}
-
-provider "aws" {
-  region = var.aws_region
 }
 
 // IAM role for Lambda
