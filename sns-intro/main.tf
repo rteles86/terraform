@@ -36,20 +36,10 @@ data "aws_iam_policy_document" "sqs_queue_policy" {
       identifiers = ["sns.amazonaws.com"]
     }
 
-    actions = [
-      "SQS:*",
-    ]
-
-    resources: "*"
-
-    condition {
-      test     = "ArnEquals"
-      variable = "aws:SourceArn"
-
-      values = [
-        aws_sns_topic.user_updates.arn,
-        aws_sns_topic.product_updates.arn,
-      ]
-    }
+    "Action": [
+        "sqs:*"
+    ],
+    "Effect": "Allow",
+    "Resource": "*"
   }
 }
