@@ -1,7 +1,55 @@
-provider "aws" {
-  region = "us-east-1"
+resource "aws_sns_topic" "notification_updates" {
+  name = "user-updates-topic"
 }
 
-resource "aws_sns_topic" "my-first-sns" {
-  name = "my-first-sns"
+resource "aws_sqs_queue" "user_updates_queue" {
+  name   = "user-updates-queue"
+  policy = data.aws_iam_policy_document.sqs_queue_policy.json
+}
+
+resource "aws_sns_topic_subscription" "user_updates_sqs_target" {
+  topic_arn = aws_sns_topic.notification_updates.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.user_updates_queue.arn
+}
+
+resource "aws_sqs_queue" "product_updates_queue" {
+  name   = "product-updates-queue"
+  policy = data.aws_iam_policy_document.sqs_queue_policy.json
+}
+
+resource "aws_sns_topic_subscription" "product_updates_sqs_target" {
+  topic_arn = aws_sns_topic.notification_updates.arn
+  protocol  = "sqs"
+  endpoint  = aws_sqs_queue.product_updates_queue.arn
+}
+
+data "aws_iam_policy_document" "sqs_queue_policy" {
+  policy_id = "terraform-sns-sqs"
+
+  statement {
+    sid    = "user_updates_sqs_target"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+
+    actions = [
+      "SQS:*",
+    ]
+
+    resources: "*"
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+
+      values = [
+        aws_sns_topic.user_updates.arn,
+        aws_sns_topic.product_updates.arn,
+      ]
+    }
+  }
 }
