@@ -84,3 +84,26 @@ resource "aws_sns_topic_subscription" "product_updates_sqs_target" {
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.product_updates_queue.arn
 }
+
+# Bucket S3
+resource "aws_s3_bucket" "notifications" {
+  bucket = "notifications"
+  acl    = "private"
+
+  tags = {
+    Name        = "notifications"
+    Environment = "dev"
+  }
+}
+
+# Criar "pasta" users
+resource "aws_s3_object" "users_folder" {
+  bucket = aws_s3_bucket.notifications.id
+  key    = "users/"   # prefixo que simula pasta
+}
+
+# Criar "pasta" products
+resource "aws_s3_object" "products_folder" {
+  bucket = aws_s3_bucket.notifications.id
+  key    = "products/"
+}
