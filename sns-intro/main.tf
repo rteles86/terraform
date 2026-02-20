@@ -15,9 +15,32 @@ variable "lambda_zip_path" {
   default     = "./SendUpdateNotifications/SendUpdateNotifications.zip"
 }
 
+variable "role_name" {
+  description = "IAM role name to use or create for the Lambda"
+  type        = string
+  default     = "send_update_notifications_lambda_role"
+}
+
 // IAM role for Lambda
+// Check if the role already exists using an external helper script (returns {"exists":"true"} or {"exists":"false"})
+data "external" "role_exists" {
+  program = ["sh", "${path.module}/scripts/check_role.sh"]
+  query = {
+    role_name = var.role_name
+  }
+}
+
+// If the role exists, fetch it. Use count so the data lookup only runs when the role exists.
+data "aws_iam_role" "existing" {
+  count = data.external.role_exists.result.exists == "true" ? 1 : 0
+  name  = var.role_name
+}
+
+// Create the role only when it does not already exist.
 resource "aws_iam_role" "lambda_role" {
-  name = "send_update_notifications_lambda_role"
+  count = data.external.role_exists.result.exists == "true" ? 0 : 1
+
+  name = var.role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -36,7 +59,7 @@ resource "aws_iam_role" "lambda_role" {
 // Inline policy: CloudWatch Logs + SNS Publish to the two topics
 resource "aws_iam_role_policy" "lambda_policy" {
   name = "send_update_notifications_policy"
-  role = aws_iam_role.lambda_role.id
+  role = length(data.aws_iam_role.existing) > 0 ? data.aws_iam_role.existing[0].id : aws_iam_role.lambda_role[0].id
 
   policy = jsonencode({
     Version = "2012-10-17",
@@ -64,7 +87,7 @@ resource "aws_lambda_function" "send_update_notifications" {
   function_name = "SendUpdateNotificatons"
   filename      = var.lambda_zip_path
   source_code_hash = filebase64sha256(var.lambda_zip_path)
-  role          = aws_iam_role.lambda_role.arn
+  role = length(data.aws_iam_role.existing) > 0 ? data.aws_iam_role.existing[0].arn : aws_iam_role.lambda_role[0].arn
   handler       = "SendUpdateNotifications::SendUpdateNotifications.Function::FunctionHandler"
   runtime       = "dotnet8"
   memory_size   = 256
