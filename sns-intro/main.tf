@@ -21,6 +21,12 @@ variable "role_name" {
   default     = "send_update_notifications_lambda_role"
 }
 
+variable "lambda_function_name" {
+  description = "Lambda function name to create or adopt"
+  type        = string
+  default     = "SendUpdateNotificatons"
+}
+
 // IAM role for Lambda
 // Check if the role already exists using an external helper script (returns {"exists":"true"} or {"exists":"false"})
 data "external" "role_exists" {
@@ -83,15 +89,30 @@ resource "aws_iam_role_policy" "lambda_policy" {
 }
 
 // Lambda function
+// Check if the Lambda function already exists using an external helper script
+data "external" "lambda_exists" {
+  program = ["sh", "${path.module}/scripts/check_lambda.sh"]
+  query = {
+    function_name = var.lambda_function_name
+  }
+}
+
+// If exists, fetch it so we can reference it. Otherwise create the function below.
+data "aws_lambda_function" "existing" {
+  count         = data.external.lambda_exists.result.exists == "true" ? 1 : 0
+  function_name = var.lambda_function_name
+}
+
 resource "aws_lambda_function" "send_update_notifications" {
-  function_name = "SendUpdateNotificatons"
-  filename      = var.lambda_zip_path
-  source_code_hash = filebase64sha256(var.lambda_zip_path)
-  role = length(data.aws_iam_role.existing) > 0 ? data.aws_iam_role.existing[0].arn : aws_iam_role.lambda_role[0].arn
-  handler       = "SendUpdateNotifications::SendUpdateNotifications.Function::FunctionHandler"
-  runtime       = "dotnet8"
-  memory_size   = 256
-  timeout       = 30
+  count             = data.external.lambda_exists.result.exists == "true" ? 0 : 1
+  function_name     = var.lambda_function_name
+  filename          = var.lambda_zip_path
+  source_code_hash  = filebase64sha256(var.lambda_zip_path)
+  role              = length(data.aws_iam_role.existing) > 0 ? data.aws_iam_role.existing[0].arn : aws_iam_role.lambda_role[0].arn
+  handler           = "SendUpdateNotifications::SendUpdateNotifications.Function::FunctionHandler"
+  runtime           = "dotnet8"
+  memory_size       = 256
+  timeout           = 30
 
   environment {
     variables = {
@@ -102,6 +123,6 @@ resource "aws_lambda_function" "send_update_notifications" {
 }
 
 output "lambda_name" {
-  value = aws_lambda_function.send_update_notifications.function_name
+  value = length(data.aws_lambda_function.existing) > 0 ? data.aws_lambda_function.existing[0].function_name : aws_lambda_function.send_update_notifications[0].function_name
 }
 
